@@ -1,0 +1,2196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NO₂ Air Quality Monitoring Dashboard — Madrid</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<style>
+  :root {
+  --bg: #f5f7f5;
+  --bg2: #ffffff;
+  --bg3: #eef2ef;
+  --border: rgba(70, 85, 75, 0.08);
+  --border2: rgba(70, 85, 75, 0.16);
+  --text: #1f2933;
+  --text2: #5b6670;
+  --text3: #8a949d;
+  --ok: #5f8f7a;
+  --ok-light: #edf5f1;
+  --warn: #c59b6d;
+  --warn-light: #faf4ec;
+  --danger: #c97b7b;
+  --danger-light: #fdf0f0;
+  --info: #6f8fa6;
+  --info-light: #edf3f7;
+  --purple: #8d87b7;
+  --purple-light: #f2f0fa;
+  --accent: #6f8fa6;
+  --font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Cascadia Code', 'Fira Code', monospace;
+  --radius: 12px;
+  --radius-lg: 18px;
+}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: linear-gradient(180deg,#f8faf8 0%,#f5f7f5 100%);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .topbar-brand .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; } 50% { opacity:0.4; }
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .live-badge {
+    background: rgba(29,158,117,0.15);
+    color: var(--ok);
+    border: 1px solid rgba(29,158,117,0.3);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 56px);
+  }
+
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 4px 18px 8px;
+    margin-top: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    cursor: pointer;
+    border-radius: 0;
+    color: var(--text2);
+    font-size: 13.5px;
+    transition: background 0.15s, color 0.15s;
+    border-left: 2px solid transparent;
+    text-decoration: none;
+  }
+
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active {
+    background: rgba(55,138,221,0.1);
+    color: var(--info);
+    border-left: 2px solid var(--info);
+  }
+
+  .nav-item i { font-size: 17px; }
+
+  .main { padding: 24px; overflow-x: hidden; }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .page-header p {
+    color: var(--text2);
+    font-size: 13px;
+  }
+
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .metric-card.ok::before { background: var(--ok); }
+  .metric-card.warn::before { background: var(--warn); }
+  .metric-card.danger::before { background: var(--danger); }
+  .metric-card.info::before { background: var(--info); }
+
+  .metric-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text3);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .metric-value.ok { color: var(--ok); }
+  .metric-value.warn { color: var(--warn); }
+  .metric-value.danger { color: var(--danger); }
+  .metric-value.info { color: var(--info); }
+
+  .metric-sub {
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-subtitle {
+    font-size: 12px;
+    color: var(--text3);
+    margin-bottom: 16px;
+  }
+
+  .chart-wrap { position: relative; width: 100%; }
+
+  /* Alerts */
+  .alert-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    border: 1px solid;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .alert-item.critical {
+    background: rgba(226,75,74,0.08);
+    border-color: rgba(226,75,74,0.25);
+  }
+
+  .alert-item.warning {
+    background: rgba(186,117,23,0.08);
+    border-color: rgba(186,117,23,0.25);
+  }
+
+  .alert-item.info {
+    background: rgba(55,138,221,0.08);
+    border-color: rgba(55,138,221,0.25);
+  }
+
+  .alert-icon { font-size: 20px; margin-top: 1px; flex-shrink: 0; }
+  .alert-item.critical .alert-icon { color: var(--danger); }
+  .alert-item.warning .alert-icon { color: var(--warn); }
+  .alert-item.info .alert-icon { color: var(--info); }
+
+  .alert-body { flex: 1; }
+  .alert-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  .alert-item.critical .alert-title { color: var(--danger); }
+  .alert-item.warning .alert-title { color: #ef9f27; }
+  .alert-item.info .alert-title { color: var(--info); }
+
+  .alert-meta { font-size: 12px; color: var(--text3); }
+  .alert-time { font-size: 11px; color: var(--text3); margin-left: auto; white-space: nowrap; font-family: var(--mono); }
+
+  /* Threshold table */
+  .thresh-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .thresh-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .thresh-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text2);
+  }
+
+  .thresh-table tr:last-child td { border-bottom: none; }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .status-pill.ok { background: rgba(29,158,117,0.15); color: var(--ok); }
+  .status-pill.warn { background: rgba(186,117,23,0.15); color: #ef9f27; }
+  .status-pill.danger { background: rgba(226,75,74,0.15); color: var(--danger); }
+
+  /* Dispersion map */
+  #dispersion-svg { width: 100%; }
+
+  .station-dot { cursor: pointer; transition: r 0.2s; }
+  .station-dot:hover { r: 12; }
+
+  /* Heatmap */
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: 40px repeat(24, 1fr);
+    gap: 2px;
+    font-size: 10px;
+  }
+
+  .hm-cell {
+    height: 24px;
+    border-radius: 2px;
+  }
+
+  .hm-label {
+    display: flex;
+    align-items: center;
+    color: var(--text3);
+    font-size: 11px;
+  }
+
+  .hm-header {
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    font-size: 10px;
+  }
+
+  /* Station selector */
+  .station-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .st-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+  }
+
+  .st-btn:hover { background: var(--bg3); color: var(--text); }
+  .st-btn.active { background: rgba(55,138,221,0.15); border-color: rgba(55,138,221,0.4); color: var(--info); }
+
+  /* Threshold line control */
+  .controls { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ctrl-label { font-size: 12px; color: var(--text3); }
+  .ctrl-val { font-size: 13px; font-weight: 600; color: var(--danger); font-family: var(--mono); min-width: 48px; }
+
+  input[type="range"] {
+    accent-color: var(--info);
+    height: 4px;
+    width: 120px;
+    cursor: pointer;
+  }
+
+  /* Scrollable log */
+  .log-list {
+    max-height: 260px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .log-entry {
+    display: flex;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text2);
+  }
+
+  .log-time { color: var(--text3); flex-shrink: 0; }
+  .log-entry.peak .log-msg { color: var(--danger); }
+  .log-entry.warn .log-msg { color: #ef9f27; }
+
+  /* Model comparison */
+  .model-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }
+
+  .model-metric {
+    background: var(--bg3);
+    border-radius: var(--radius);
+    padding: 12px;
+    text-align: center;
+  }
+
+  .model-metric .mm-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .model-metric .mm-val { font-size: 18px; font-weight: 700; }
+  .model-metric.cnn .mm-val { color: var(--info); }
+  .model-metric.rf .mm-val { color: var(--purple); }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Tooltip for map */
+  .map-tooltip {
+    position: absolute;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    pointer-events: none;
+    font-size: 12px;
+    display: none;
+    z-index: 50;
+    min-width: 160px;
+  }
+
+  .tt-name { font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+  .tt-row { display: flex; justify-content: space-between; gap: 16px; color: var(--text2); }
+
+  .section-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  .tab-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font);
+    transition: all 0.15s;
+    margin-bottom: -1px;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--info); border-bottom-color: var(--info); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="dot"></div>
+    NO₂ Air Quality Monitor — Madrid
+  </div>
+  <div class="topbar-right">
+    <span>Data: Jan 2025 – Feb 2026</span>
+    <span>|</span>
+    <span>10 Stations · MAGNITUD 12</span>
+    <span>|</span>
+    <span class="live-badge">Live Simulation</span>
+    <span id="clock" style="font-family:monospace;font-size:13px;"></span>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sidebar-label">Overview</div>
+    <a class="nav-item active" onclick="showSection('overview')">
+      <i class="ti ti-dashboard"></i> Dashboard
+    </a>
+    <div class="sidebar-label">Detection</div>
+    <a class="nav-item" onclick="showSection('peaks')">
+      <i class="ti ti-activity-heartbeat"></i> Anomaly Peaks
+    </a>
+    <a class="nav-item" onclick="showSection('thresholds')">
+      <i class="ti ti-shield-check"></i> Threshold Compliance
+    </a>
+    <div class="sidebar-label">Alerts</div>
+    <a class="nav-item" onclick="showSection('alerts')">
+      <i class="ti ti-bell-ringing"></i> Alert Center
+      <span id="alert-count" style="margin-left:auto;background:rgba(226,75,74,0.2);color:var(--danger);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;">3</span>
+    </a>
+    <div class="sidebar-label">Visualization</div>
+    <a class="nav-item" onclick="showSection('dispersion')">
+      <i class="ti ti-map-2"></i> Pollution Dispersion
+    </a>
+    <a class="nav-item" onclick="showSection('heatmap')">
+      <i class="ti ti-grid-dots"></i> Temporal Heatmap
+    </a>
+    <div class="sidebar-label">Models</div>
+    <a class="nav-item" onclick="showSection('forecast')">
+      <i class="ti ti-chart-line"></i> CNN-LSTM Forecast
+    </a>
+    <div class="sidebar-label">Data Fusion</div>
+    <a class="nav-item" onclick="showSection('sec-fusion')">
+      <i class="ti ti-layers-intersect"></i> Fusion Pipeline
+    </a>
+    <a class="nav-item" onclick="showSection('sec-fusion-results')">
+      <i class="ti ti-map-2"></i> Fusion Results
+    </a>
+  </nav>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div class="section active" id="overview">
+      <div class="page-header">
+        <h1>Network Overview</h1>
+        <p>Real-time NO₂ status across all 10 Madrid monitoring stations</p>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card info">
+          <div class="metric-label">Network Average NO₂</div>
+          <div class="metric-value info" id="avg-no2">42.3</div>
+          <div class="metric-sub">µg/m³ · WHO limit: 40</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Stations Exceeding</div>
+          <div class="metric-value danger">3 / 10</div>
+          <div class="metric-sub">Above EU annual limit (40 µg/m³)</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Peak Anomalies Today</div>
+          <div class="metric-value warn" id="peak-count">7</div>
+          <div class="metric-sub">σ &gt; 2 from rolling mean</div>
+        </div>
+        <div class="metric-card ok">
+          <div class="metric-label">Data Completeness</div>
+          <div class="metric-value ok">98.2%</div>
+          <div class="metric-sub">Valid readings (flag = V)</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-area" style="color:var(--info)"></i> 24-Hour NO₂ Trend</div>
+          <div class="card-subtitle">Station network average with threshold overlay</div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="trend-chart" role="img" aria-label="24-hour NO2 trend across Madrid stations"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-bar" style="color:var(--purple)"></i> Per-Station Daily Mean</div>
+          <div class="card-subtitle">Average µg/m³ vs EU/WHO thresholds</div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="station-bar" role="img" aria-label="Per-station daily NO2 mean bar chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-table" style="color:var(--ok)"></i> Station Status Table</div>
+        <div class="card-subtitle">Live compliance snapshot — all 10 monitoring stations</div>
+        <table class="thresh-table">
+          <thead>
+            <tr>
+              <th>Station</th>
+              <th>Type</th>
+              <th>Current (µg/m³)</th>
+              <th>Daily Mean</th>
+              <th>Hourly Max</th>
+              <th>WHO Status</th>
+              <th>EU Status</th>
+            </tr>
+          </thead>
+          <tbody id="station-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PEAKS -->
+    <div class="section" id="peaks">
+      <div class="page-header">
+        <h1>Abnormal Emission Peak Detection</h1>
+        <p>Statistical anomaly detection using rolling z-score (σ &gt; 2.0 threshold)</p>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card danger">
+          <div class="metric-label">Peaks Detected (30d)</div>
+          <div class="metric-value danger">47</div>
+          <div class="metric-sub">Readings &gt; mean + 2σ</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Peak Frequency</div>
+          <div class="metric-value warn">1.6/day</div>
+          <div class="metric-sub">Across all stations</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Highest Peak</div>
+          <div class="metric-value info">306</div>
+          <div class="metric-sub">µg/m³ — Station 11, H22</div>
+        </div>
+        <div class="metric-card ok">
+          <div class="metric-label">Most Affected Hour</div>
+          <div class="metric-value ok">21:00</div>
+          <div class="metric-sub">Evening rush — peak cluster</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title"><i class="ti ti-activity-heartbeat" style="color:var(--danger)"></i> Anomaly Detection — Station Time Series</div>
+        <div class="card-subtitle">Orange markers = detected peaks (z-score &gt; 2σ) · Red line = dynamic threshold</div>
+
+        <div class="station-selector" id="peak-station-sel"></div>
+
+        <div class="controls">
+          <span class="ctrl-label">Z-score threshold:</span>
+          <input type="range" min="1" max="4" step="0.5" value="2" id="zscore-slider"/>
+          <span class="ctrl-val" id="zscore-val">2.0σ</span>
+          <span class="ctrl-label" style="margin-left:16px;">Window:</span>
+          <input type="range" min="3" max="12" step="1" value="6" id="window-slider"/>
+          <span class="ctrl-val" id="window-val" style="color:var(--info);">6h</span>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#378add;"></div> NO₂ readings</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef9f27;"></div> Rolling mean</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#e24b4a;"></div> Anomaly threshold</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(226,75,74,0.4);border:1px solid #e24b4a;"></div> Detected peak</div>
+        </div>
+
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="peak-chart" role="img" aria-label="NO2 time series with anomaly peak markers"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-clock" style="color:var(--warn)"></i> Peak Distribution by Hour</div>
+          <div class="card-subtitle">When do anomalies most commonly occur?</div>
+          <div class="chart-wrap" style="height:200px;">
+            <canvas id="peak-hour-chart" role="img" aria-label="Peak anomalies by hour of day"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-terminal-2" style="color:var(--text3)"></i> Peak Event Log</div>
+          <div class="card-subtitle">Chronological anomaly record</div>
+          <div class="log-list" id="peak-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THRESHOLDS -->
+    <div class="section" id="thresholds">
+      <div class="page-header">
+        <h1>Environmental Standards Compliance</h1>
+        <p>Comparing NO₂ levels against WHO 2021 guidelines and EU Directive 2008/50/EC</p>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title"><i class="ti ti-file-certificate" style="color:var(--ok)"></i> Regulatory Standards Reference</div>
+        <div class="card-subtitle">Applicable thresholds for NO₂ monitoring</div>
+        <table class="thresh-table">
+          <thead>
+            <tr><th>Standard</th><th>Averaging Period</th><th>Limit (µg/m³)</th><th>Legal Status</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>WHO 2021 Guideline</td><td>Annual mean</td><td>10</td><td><span class="status-pill danger">Stricter</span></td><td>Health-based, non-binding</td></tr>
+            <tr><td>WHO 2021 Guideline</td><td>24-hour mean</td><td>25</td><td><span class="status-pill danger">Stricter</span></td><td>Health-based, non-binding</td></tr>
+            <tr><td>EU Directive 2008/50/EC</td><td>Annual mean</td><td>40</td><td><span class="status-pill warn">Binding</span></td><td>Member State mandatory</td></tr>
+            <tr><td>EU Directive 2008/50/EC</td><td>Hourly (1h)</td><td>200</td><td><span class="status-pill warn">Binding</span></td><td>Max 18 exceedances/year</td></tr>
+            <tr><td>Spain RD 102/2011</td><td>Hourly alert</td><td>400</td><td><span class="status-pill info">Alert level</span></td><td>Public notification required</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-radar" style="color:var(--info)"></i> Annual Mean vs Limits</div>
+          <div class="card-subtitle">Station annual mean NO₂ compared to WHO & EU thresholds</div>
+          <div class="chart-wrap" style="height:250px;">
+            <canvas id="compliance-chart" role="img" aria-label="Annual NO2 mean per station vs regulatory thresholds"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-percentage" style="color:var(--warn)"></i> Exceedance Rate Analysis</div>
+          <div class="card-subtitle">% of hourly readings exceeding EU 200 µg/m³ limit per station</div>
+          <div class="chart-wrap" style="height:250px;">
+            <canvas id="exceed-chart" role="img" aria-label="Exceedance rate per station"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-calendar-stats" style="color:var(--purple)"></i> Monthly Compliance Tracking</div>
+        <div class="card-subtitle">Network-wide monthly mean versus WHO 25 µg/m³ and EU 40 µg/m³ daily thresholds</div>
+        <div class="chart-wrap" style="height:220px;">
+          <canvas id="monthly-chart" role="img" aria-label="Monthly NO2 mean compliance trend"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="section" id="alerts">
+      <div class="page-header">
+        <h1>Automatic Alert Center</h1>
+        <p>Real-time threshold exceedance notifications with escalation levels</p>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card danger">
+          <div class="metric-label">Critical Alerts</div>
+          <div class="metric-value danger" id="crit-count">2</div>
+          <div class="metric-sub">NO₂ &gt; 200 µg/m³</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Warning Alerts</div>
+          <div class="metric-value warn" id="warn-count">3</div>
+          <div class="metric-sub">NO₂ &gt; 100 µg/m³</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Info Notices</div>
+          <div class="metric-value info" id="info-count">5</div>
+          <div class="metric-sub">Above WHO 25 µg/m³</div>
+        </div>
+        <div class="metric-card ok">
+          <div class="metric-label">Resolved (24h)</div>
+          <div class="metric-value ok">8</div>
+          <div class="metric-sub">Auto-cleared below threshold</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-bell-ringing" style="color:var(--danger)"></i> Active Alerts</div>
+          <div class="card-subtitle">Ordered by severity · Auto-refreshes every 30s</div>
+          <div class="alert-list" id="active-alerts"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="ti ti-settings" style="color:var(--text2)"></i> Alert Threshold Configuration</div>
+          <div class="card-subtitle">Adjust notification triggers — changes apply immediately</div>
+
+          <div style="display:flex;flex-direction:column;gap:18px;margin-top:4px;">
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-size:13px;color:var(--text);">Critical threshold</span>
+                <span style="font-family:monospace;color:var(--danger);font-weight:700;" id="crit-thresh-val">200 µg/m³</span>
+              </div>
+              <input type="range" min="100" max="400" step="10" value="200" id="crit-thresh" style="width:100%;"/>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">EU Directive hourly alarm level — 200 µg/m³</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-size:13px;color:var(--text);">Warning threshold</span>
+                <span style="font-family:monospace;color:#ef9f27;font-weight:700;" id="warn-thresh-val">100 µg/m³</span>
+              </div>
+              <input type="range" min="40" max="200" step="10" value="100" id="warn-thresh" style="width:100%;"/>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Internal warning level — elevated exposure concern</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-size:13px;color:var(--text);">Info threshold</span>
+                <span style="font-family:monospace;color:var(--info);font-weight:700;" id="info-thresh-val">25 µg/m³</span>
+              </div>
+              <input type="range" min="10" max="60" step="5" value="25" id="info-thresh" style="width:100%;"/>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">WHO 2021 24-hour guideline — 25 µg/m³</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Simulate exceedance event:</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button onclick="fireAlert('critical')" style="padding:6px 14px;background:rgba(226,75,74,0.15);border:1px solid rgba(226,75,74,0.3);color:var(--danger);border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font);">
+                <i class="ti ti-alert-triangle"></i> Fire Critical
+              </button>
+              <button onclick="fireAlert('warning')" style="padding:6px 14px;background:rgba(186,117,23,0.15);border:1px solid rgba(186,117,23,0.3);color:#ef9f27;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font);">
+                <i class="ti ti-alert-circle"></i> Fire Warning
+              </button>
+              <button onclick="clearAlerts()" style="padding:6px 14px;background:rgba(29,158,117,0.15);border:1px solid rgba(29,158,117,0.3);color:var(--ok);border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--font);">
+                <i class="ti ti-check"></i> Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-chart-line" style="color:var(--warn)"></i> Alert Event History</div>
+        <div class="card-subtitle">Last 30 days — critical and warning events by station</div>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="alert-history" role="img" aria-label="Alert history bar chart over last 30 days"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISPERSION -->
+    <div class="section" id="dispersion">
+      <div class="page-header">
+        <h1>Pollution Dispersion Visualization</h1>
+        <p>Spatial NO₂ interpolation across Madrid monitoring network · Click stations for details</p>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-map-pin" style="color:var(--danger)"></i> Concentration Heat Map</div>
+          <div class="card-subtitle">Interpolated NO₂ surface · Darker = higher concentration</div>
+          <div style="position:relative;">
+            <svg id="dispersion-svg" viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg"></svg>
+            <div class="map-tooltip" id="map-tt"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--text3);">
+            <span>Low (0)</span>
+            <div style="flex:1;height:10px;border-radius:4px;background:linear-gradient(to right,#1a2744,#1d4a8a,#1d9e75,#ef9f27,#e24b4a);"></div>
+            <span>High (&gt;200 µg/m³)</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-scatter" style="color:var(--info)"></i> Spatial Concentration Profile</div>
+          <div class="card-subtitle">Distance from city centre vs NO₂ level</div>
+          <div class="chart-wrap" style="height:280px;">
+            <canvas id="spatial-chart" role="img" aria-label="Scatter plot of NO2 concentration vs distance from centre"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-wind" style="color:var(--text2)"></i> Station NO₂ Dispersion — Wind-Adjusted</div>
+        <div class="card-subtitle">Simulated plume spread based on prevailing NW wind · Colour encodes concentration</div>
+        <div class="chart-wrap" style="height:220px;">
+          <canvas id="dispersion-chart" role="img" aria-label="Wind-adjusted NO2 dispersion bubble chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- HEATMAP -->
+    <div class="section" id="heatmap">
+      <div class="page-header">
+        <h1>Temporal Heatmap</h1>
+        <p>NO₂ concentration by station and hour-of-day — averaged over the full dataset period</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-grid-dots" style="color:var(--info)"></i> Station × Hour Heatmap</div>
+        <div class="card-subtitle">Each cell = mean NO₂ µg/m³ for that station at that hour · Colour encodes intensity</div>
+        <div style="overflow-x:auto;">
+          <div id="heatmap-container" style="min-width:700px;"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--text3);">
+          <span>0</span>
+          <div style="flex:1;height:10px;border-radius:4px;background:linear-gradient(to right,#0d1117,#185fa5,#ef9f27,#e24b4a);max-width:200px;"></div>
+          <span>200+ µg/m³</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-clock" style="color:var(--warn)"></i> Hourly Network Mean</div>
+          <div class="card-subtitle">Average NO₂ across all stations by hour of day</div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="hourly-mean-chart" role="img" aria-label="Hourly mean NO2 across all stations"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-calendar-week" style="color:var(--purple)"></i> Weekday Pattern</div>
+          <div class="card-subtitle">Mean NO₂ by day of week — workday vs weekend contrast</div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="weekday-chart" role="img" aria-label="Mean NO2 by day of week"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORECAST -->
+    <div class="section" id="forecast">
+      <div class="page-header">
+        <h1>CNN-LSTM Forecast Results</h1>
+        <p>Multi-horizon NO₂ prediction — t+1, t+7, t+14 day ahead · vs Random Forest baseline</p>
+      </div>
+
+      <div class="model-grid">
+        <div class="model-metric cnn"><div class="mm-label">CNN-LSTM t+1 MAE</div><div class="mm-val">4.2 µg/m³</div></div>
+        <div class="model-metric cnn"><div class="mm-label">CNN-LSTM t+7 MAE</div><div class="mm-val">11.7 µg/m³</div></div>
+        <div class="model-metric cnn"><div class="mm-label">CNN-LSTM t+14 MAE</div><div class="mm-val">18.3 µg/m³</div></div>
+        <div class="model-metric rf"><div class="mm-label">Random Forest MAE</div><div class="mm-val">6.1 µg/m³</div></div>
+      </div>
+
+      <div class="section-tabs">
+        <button class="tab-btn active" onclick="showTab('t1-tab',this)">t+1 Forecast</button>
+        <button class="tab-btn" onclick="showTab('t7-tab',this)">t+7 Forecast</button>
+        <button class="tab-btn" onclick="showTab('t14-tab',this)">t+14 Forecast</button>
+        <button class="tab-btn" onclick="showTab('compare-tab',this)">Model Comparison</button>
+      </div>
+
+      <div class="tab-panel active" id="t1-tab">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-line" style="color:var(--info)"></i> t+1 Day Prediction</div>
+          <div class="card-subtitle">Predicted vs actual NO₂ — CNN-LSTM 1-day horizon</div>
+          <div class="chart-wrap" style="height:260px;">
+            <canvas id="t1-chart" role="img" aria-label="CNN-LSTM 1-day NO2 forecast vs actual"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="t7-tab">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-line" style="color:var(--warn)"></i> t+7 Day Prediction</div>
+          <div class="card-subtitle">Predicted vs actual NO₂ — CNN-LSTM 7-day horizon</div>
+          <div class="chart-wrap" style="height:260px;">
+            <canvas id="t7-chart" role="img" aria-label="CNN-LSTM 7-day NO2 forecast vs actual"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="t14-tab">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-line" style="color:var(--danger)"></i> t+14 Day Prediction</div>
+          <div class="card-subtitle">Predicted vs actual NO₂ — CNN-LSTM 14-day horizon</div>
+          <div class="chart-wrap" style="height:260px;">
+            <canvas id="t14-chart" role="img" aria-label="CNN-LSTM 14-day NO2 forecast vs actual"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="compare-tab">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">MAE Comparison</div>
+            <div class="chart-wrap" style="height:240px;">
+              <canvas id="mae-chart" role="img" aria-label="MAE comparison between models"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">R² Score Comparison</div>
+            <div class="chart-wrap" style="height:240px;">
+              <canvas id="r2-chart" role="img" aria-label="R-squared comparison between models"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FUSION PIPELINE -->
+    <div class="section" id="sec-fusion">
+      <div class="page-header">
+        <h1><i class="ti ti-layers-intersect" style="color:var(--purple);margin-right:8px;"></i>Data Fusion Pipeline</h1>
+        <p>Variance-weighted fusion of ground sensor kriging interpolation with TROPOMI satellite NO₂ retrievals — Madrid, 2025-01-14</p>
+      </div>
+
+      <!-- Pipeline Overview Cards -->
+      <div class="metrics-row">
+        <div class="metric-card info">
+          <div class="metric-label">Ground Stations</div>
+          <div class="metric-value info">24</div>
+          <div class="metric-sub">AQMS sensors, Madrid network</div>
+        </div>
+        <div class="metric-card ok">
+          <div class="metric-label">Kriging R²</div>
+          <div class="metric-value ok">0.91</div>
+          <div class="metric-sub">Exponential variogram model</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Satellite Source</div>
+          <div class="metric-value warn" style="font-size:18px;padding-top:4px;">TROPOMI</div>
+          <div class="metric-sub">Sentinel-5P / Google Earth Engine</div>
+        </div>
+        <div class="metric-card" style="border-top:2px solid var(--purple);">
+          <div class="metric-label">Fused Pixels</div>
+          <div class="metric-value" style="color:var(--purple);">74 816</div>
+          <div class="metric-sub">100 m × 100 m grid, UTM 30N</div>
+        </div>
+      </div>
+
+      <!-- Pipeline Diagram -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title"><i class="ti ti-git-branch" style="color:var(--purple);"></i> Fusion Architecture</div>
+        <div class="card-subtitle">End-to-end data flow from raw inputs to variance-weighted fused surface</div>
+        <div id="fusion-pipeline-svg" style="overflow-x:auto;"></div>
+      </div>
+
+      <div class="grid-3">
+        <!-- Step: Sensor Preprocessing -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-database" style="color:var(--info);"></i> Step 1–4: Sensor Preprocessing</div>
+          <div class="card-subtitle">Raw CSV → cleaned daily means</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.8;">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(55,138,221,0.15);color:var(--info);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Filter</span> MAGNITUD == 8 (NO₂ only)</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(55,138,221,0.15);color:var(--info);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Validate</span> V-flag check per hourly reading</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(55,138,221,0.15);color:var(--info);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Aggregate</span> Daily mean (≥ 18 valid hours)</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(55,138,221,0.15);color:var(--info);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Merge</span> Station metadata + UTM coords</div>
+            <div style="display:flex;gap:8px;"><span style="background:rgba(55,138,221,0.15);color:var(--info);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">CRS</span> Re-project to EPSG:25830 (UTM 30N)</div>
+          </div>
+        </div>
+
+        <!-- Step: Kriging -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-topology-star" style="color:var(--ok);"></i> Steps 6–9: Ordinary Kriging</div>
+          <div class="card-subtitle">Spatial interpolation across 100 m grid</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.8;">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(29,158,117,0.15);color:var(--ok);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Model</span> Exponential variogram</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(29,158,117,0.15);color:var(--ok);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Grid</span> 100 m resolution, −3.825→−3.53°W</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(29,158,117,0.15);color:var(--ok);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Output</span> NO₂ mean surface + kriging variance</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(29,158,117,0.15);color:var(--ok);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Export</span> GeoTIFF (EPSG:25830)</div>
+            <div style="display:flex;gap:8px;"><span style="background:rgba(29,158,117,0.15);color:var(--ok);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Coverage</span> Full Madrid bounding box</div>
+          </div>
+        </div>
+
+        <!-- Step: Satellite -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-satellite" style="color:var(--warn);"></i> Steps 10–18: TROPOMI Extraction</div>
+          <div class="card-subtitle">Sentinel-5P via Google Earth Engine</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.8;">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(186,117,23,0.15);color:var(--warn);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Product</span> OFFL/L3_NO2 — column density</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(186,117,23,0.15);color:var(--warn);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Extraction</span> Station-level + full spatial grid</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(186,117,23,0.15);color:var(--warn);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Units</span> mol/m² → µg/m³ conversion</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><span style="background:rgba(186,117,23,0.15);color:var(--warn);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Align</span> KD-Tree nearest neighbor (Step 19)</div>
+            <div style="display:flex;gap:8px;"><span style="background:rgba(186,117,23,0.15);color:var(--warn);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">Date</span> 2025-01-14 overpass</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bias Correction + Uncertainty -->
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-adjustments-horizontal" style="color:var(--purple);"></i> Step 20: Bias Correction</div>
+          <div class="card-subtitle">Satellite calibrated against 24 ground stations</div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;margin-bottom:8px;">
+              <span style="color:var(--text2);font-size:13px;">Linear Regression R²</span>
+              <span style="color:var(--danger);font-weight:700;">0.067</span>
+            </div>
+            <div style="padding:10px 14px;background:rgba(186,117,23,0.08);border:1px solid rgba(186,117,23,0.25);border-radius:8px;font-size:12px;color:var(--text2);margin-bottom:8px;">
+              <i class="ti ti-alert-circle" style="color:var(--warn);margin-right:6px;"></i>
+              Low spatial variability at TROPOMI resolution (3.5 × 5.5 km) makes regression unreliable with only 24 points. Switched to bias correction.
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;margin-bottom:8px;">
+              <span style="color:var(--text2);font-size:13px;">Mean Bias (sensor − satellite)</span>
+              <span id="fusion-bias-val" style="color:var(--ok);font-weight:700;">+18.4 µg/m³</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg3);border-radius:8px;">
+              <span style="color:var(--text2);font-size:13px;">Correction applied</span>
+              <span style="color:var(--info);font-weight:700;">Additive offset</span>
+            </div>
+          </div>
+          <div style="height:160px;position:relative;"><canvas id="bias-chart"></canvas></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="ti ti-wave-sine" style="color:var(--info);"></i> Step 21: Uncertainty Weighting</div>
+          <div class="card-subtitle">Kriging variance drives sensor/satellite blend weights</div>
+          <div style="margin-bottom:14px;">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">The normalized kriging variance field controls how much each source contributes at each pixel:</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+              <div style="padding:9px 14px;background:rgba(29,158,117,0.08);border:1px solid rgba(29,158,117,0.25);border-radius:8px;font-size:12px;">
+                <div style="font-weight:600;color:var(--ok);margin-bottom:3px;">w_sensor = 1 − σ²_norm</div>
+                <div style="color:var(--text2);">High near stations where kriging uncertainty is low → favours ground measurements</div>
+              </div>
+              <div style="padding:9px 14px;background:rgba(55,138,221,0.08);border:1px solid rgba(55,138,221,0.25);border-radius:8px;font-size:12px;">
+                <div style="font-weight:600;color:var(--info);margin-bottom:3px;">w_satellite = σ²_norm</div>
+                <div style="color:var(--text2);">High far from stations where kriging uncertainty is high → favours satellite data</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);padding:0 2px;">
+              <span>Near stations</span>
+              <div id="weight-bar-container" style="flex:1;margin:0 12px;background:var(--bg3);border-radius:20px;height:16px;overflow:hidden;display:flex;">
+                <div style="background:var(--ok);width:70%;height:100%;"></div>
+                <div style="background:var(--info);width:30%;height:100%;"></div>
+              </div>
+              <span>Far from stations</span>
+            </div>
+            <div style="display:flex;justify-content:center;gap:20px;margin-top:6px;font-size:11px;">
+              <span style="color:var(--ok);">■ Sensor weight</span>
+              <span style="color:var(--info);">■ Satellite weight</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FUSION RESULTS -->
+    <div class="section" id="sec-fusion-results">
+      <div class="page-header">
+        <h1><i class="ti ti-map-2" style="color:var(--purple);margin-right:8px;"></i>Fusion Results — 2025-01-14</h1>
+        <p>Comparison of sensor kriging, calibrated satellite (TROPOMI), and variance-weighted fused NO₂ surfaces over Madrid</p>
+      </div>
+
+      <!-- Summary metrics -->
+      <div class="metrics-row">
+        <div class="metric-card ok">
+          <div class="metric-label">Kriging Mean NO₂</div>
+          <div class="metric-value ok">42.3</div>
+          <div class="metric-sub">µg/m³ — ground truth interpolated</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Satellite (calibrated)</div>
+          <div class="metric-value warn">38.9</div>
+          <div class="metric-sub">µg/m³ — TROPOMI + bias correction</div>
+        </div>
+        <div class="metric-card" style="border-top:2px solid var(--purple);">
+          <div class="metric-label">Fused Mean NO₂</div>
+          <div class="metric-value" style="color:var(--purple);">41.1</div>
+          <div class="metric-sub">µg/m³ — variance-weighted blend</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Fusion RMSE</div>
+          <div class="metric-value info">3.7</div>
+          <div class="metric-sub">µg/m³ — vs. station ground truth</div>
+        </div>
+      </div>
+
+      <!-- Three-map comparison -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title"><i class="ti ti-layout-columns" style="color:var(--purple);"></i> Side-by-Side NO₂ Surfaces</div>
+        <div class="card-subtitle">Kriging (sensor) · Calibrated Satellite · Variance-Weighted Fusion — Madrid bounding box</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:8px;">
+          <div>
+            <div style="text-align:center;font-size:12px;font-weight:600;color:var(--ok);margin-bottom:8px;">① Sensor Kriging</div>
+            <canvas id="map-kriging" height="220"></canvas>
+            <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px;">Ground truth interpolation</div>
+          </div>
+          <div>
+            <div style="text-align:center;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px;">② Calibrated Satellite (TROPOMI)</div>
+            <canvas id="map-satellite" height="220"></canvas>
+            <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px;">Bias-corrected column density</div>
+          </div>
+          <div>
+            <div style="text-align:center;font-size:12px;font-weight:600;color:var(--purple);margin-bottom:8px;">③ Fused NO₂</div>
+            <canvas id="map-fused" height="220"></canvas>
+            <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px;">Variance-weighted blend</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;">
+          <div id="colorbar-gradient" style="width:200px;height:12px;border-radius:6px;background:linear-gradient(to right,#185fa5,#ef9f27,#e24b4a);"></div>
+          <span style="font-size:11px;color:var(--text3);">Low NO₂ → High NO₂</span>
+        </div>
+      </div>
+
+      <!-- Scatter & difference charts -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-dots" style="color:var(--info);"></i> Fusion vs Kriging Scatter</div>
+          <div class="card-subtitle">Pixel-level agreement at 24 station locations</div>
+          <div class="chart-wrap" style="height:220px;"><canvas id="fusion-scatter-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-trending-up" style="color:var(--ok);"></i> NO₂ Profile — Sensor vs Fused vs Satellite</div>
+          <div class="card-subtitle">West–East transect across Madrid centre</div>
+          <div class="chart-wrap" style="height:220px;"><canvas id="fusion-profile-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Metrics table -->
+      <div class="card">
+        <div class="card-title"><i class="ti ti-table" style="color:var(--purple);"></i> Per-Station Fusion Summary</div>
+        <div class="card-subtitle">Kriging, satellite and fused values at each of the 24 ground stations</div>
+        <div style="overflow-x:auto;margin-top:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="fusion-table">
+            <thead>
+              <tr style="color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:0.5px;">
+                <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);">Station</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);">Sensor (µg/m³)</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);">Satellite (µg/m³)</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);">Fused (µg/m³)</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);">Bias</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);">w_sensor</th>
+              </tr>
+            </thead>
+            <tbody id="fusion-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// === DATA ===
+const stations = [
+  { id: 11, name: 'Retiro',        lat: 40.4143, lon: -3.6824, type: 'Urban Background', mean: 58.4, max: 219, exceed: 0.8  },
+  { id: 16, name: 'Escuelas Agui.',lat: 40.4087, lon: -3.7119, type: 'Urban Traffic',    mean: 72.1, max: 306, exceed: 2.1  },
+  { id: 17, name: 'Ramón y Cajal', lat: 40.4516, lon: -3.6774, type: 'Urban Background', mean: 45.2, max: 181, exceed: 0.3  },
+  { id: 18, name: 'Arturo Soria',  lat: 40.4394, lon: -3.6429, type: 'Urban Background', mean: 38.7, max: 152, exceed: 0.1  },
+  { id: 24, name: 'Casa de Campo', lat: 40.4153, lon: -3.7480, type: 'Suburban',          mean: 28.3, max:  97, exceed: 0.0  },
+  { id: 27, name: 'Barajas',       lat: 40.4759, lon: -3.5792, type: 'Urban Background', mean: 31.5, max:  89, exceed: 0.0  },
+  { id: 35, name: 'Urb. Embajada', lat: 40.4222, lon: -3.6900, type: 'Urban Background', mean: 42.1, max: 175, exceed: 0.2  },
+  { id: 36, name: 'Pza. del Carmen',lat:40.4192, lon: -3.7036, type: 'Urban Traffic',    mean: 65.3, max: 212, exceed: 1.4  },
+  { id: 38, name: 'Cuatro Caminos',lat: 40.4450, lon: -3.7040, type: 'Urban Traffic',    mean: 54.8, max: 194, exceed: 0.9  },
+  { id: 39, name: 'Barrio del Pilar',lat:40.4750,lon: -3.7050, type: 'Urban Background', mean: 36.2, max: 107, exceed: 0.0  },
+];
+
+const hours = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`);
+
+// Realistic daily NO2 pattern (hourly multiplier)
+const hourlyPattern = [0.7,0.65,0.6,0.58,0.6,0.72,0.95,1.3,1.4,1.25,1.1,1.05,1.0,0.95,0.88,0.82,0.85,1.0,1.15,1.25,1.3,1.2,1.0,0.82];
+
+function genHourlyData(mean, noise=0.25) {
+  return hourlyPattern.map(m => Math.max(0, Math.round(mean * m * (1 + (Math.random()-0.5)*noise))));
+}
+
+const stationHourly = stations.map(s => genHourlyData(s.mean));
+
+// === NAV ===
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// === CLOCK ===
+function tick() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('es-ES');
+}
+setInterval(tick, 1000); tick();
+
+// === STATION TABLE ===
+function buildStationTable() {
+  const tbody = document.getElementById('station-table-body');
+  tbody.innerHTML = '';
+  stations.forEach(s => {
+    const current = Math.round(s.mean * hourlyPattern[new Date().getHours()] * (1+(Math.random()-0.5)*0.15));
+    const who = s.mean > 25 ? 'danger' : 'ok';
+    const eu  = s.mean > 40 ? 'warn'   : 'ok';
+    tbody.innerHTML += `
+      <tr>
+        <td style="color:var(--text);font-weight:500;">St.${s.id} — ${s.name}</td>
+        <td style="color:var(--text3);font-size:12px;">${s.type}</td>
+        <td style="font-family:monospace;color:${current>200?'var(--danger)':current>100?'#ef9f27':'var(--text)'};">${current}</td>
+        <td style="font-family:monospace;">${s.mean.toFixed(1)}</td>
+        <td style="font-family:monospace;color:${s.max>200?'var(--danger)':'var(--text2)'};">${s.max}</td>
+        <td><span class="status-pill ${who}">${who==='ok'?'✓ OK':'✗ Exceeds'}</span></td>
+        <td><span class="status-pill ${eu}">${eu==='ok'?'✓ OK':'⚠ Exceeds'}</span></td>
+      </tr>`;
+  });
+}
+buildStationTable();
+
+// === TREND CHART ===
+new Chart(document.getElementById('trend-chart'), {
+  type: 'line',
+  data: {
+    labels: hours,
+    datasets: [
+      {
+        label: 'Network mean NO₂',
+        data: hourlyPattern.map(m => Math.round(42.3 * m)),
+        borderColor: '#378add', backgroundColor: 'rgba(55,138,221,0.08)',
+        fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2,
+        borderDash: []
+      },
+      {
+        label: 'EU hourly limit (200)',
+        data: Array(24).fill(200),
+        borderColor: '#e24b4a', borderWidth: 1.5, borderDash: [5,3],
+        pointRadius: 0, fill: false
+      },
+      {
+        label: 'WHO 24h guideline (25)',
+        data: Array(24).fill(25),
+        borderColor: '#1d9e75', borderWidth: 1.5, borderDash: [3,3],
+        pointRadius: 0, fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#6e7681',maxTicksLimit:8,font:{size:11}} },
+      y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#6e7681',font:{size:11}}, title:{display:true,text:'µg/m³',color:'#6e7681'} }
+    }
+  }
+});
+
+// === STATION BAR ===
+new Chart(document.getElementById('station-bar'), {
+  type: 'bar',
+  data: {
+    labels: stations.map(s=>`St.${s.id}`),
+    datasets: [
+      {
+        label: 'Daily mean',
+        data: stations.map(s=>s.mean),
+        backgroundColor: stations.map(s => s.mean>40?'rgba(226,75,74,0.7)':s.mean>25?'rgba(186,117,23,0.7)':'rgba(29,158,117,0.7)'),
+        borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend:{display:false},
+      annotation: { annotations: {
+        eu: { type:'line', yMin:40, yMax:40, borderColor:'#e24b4a', borderWidth:1.5, borderDash:[4,3] },
+        who:{ type:'line', yMin:25, yMax:25, borderColor:'#1d9e75', borderWidth:1.5, borderDash:[3,3] }
+      }}
+    },
+    scales: {
+      x: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#6e7681',font:{size:11}} },
+      y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#6e7681',font:{size:11}} }
+    }
+  }
+});
+
+// === PEAKS ===
+const peakStations = stations.slice(0,5);
+let activePeakStation = 0;
+let zThresh = 2.0;
+let winSize = 6;
+
+function buildPeakStationSel() {
+  const el = document.getElementById('peak-station-sel');
+  el.innerHTML = '';
+  peakStations.forEach((s,i) => {
+    const b = document.createElement('button');
+    b.className = 'st-btn' + (i===activePeakStation?' active':'');
+    b.textContent = `St.${s.id} — ${s.name}`;
+    b.onclick = () => { activePeakStation=i; buildPeakStationSel(); drawPeakChart(); };
+    el.appendChild(b);
+  });
+}
+
+let peakChart;
+function drawPeakChart() {
+  const s = peakStations[activePeakStation];
+  const raw = Array.from({length:48}, (_,i) => {
+    const h = i%24;
+    const base = Math.round(s.mean * hourlyPattern[h] * (1+(Math.random()-0.5)*0.3));
+    return i===22||i===43 ? base*2.8 : base;
+  });
+
+  const rollingMean = raw.map((_,i) => {
+    const w = raw.slice(Math.max(0,i-winSize), i+1);
+    return Math.round(w.reduce((a,b)=>a+b,0)/w.length);
+  });
+  const rollingStd = raw.map((_,i) => {
+    const w = raw.slice(Math.max(0,i-winSize),i+1);
+    const m = w.reduce((a,b)=>a+b,0)/w.length;
+    return Math.sqrt(w.reduce((a,b)=>a+(b-m)**2,0)/w.length);
+  });
+
+  const threshLine = rollingMean.map((m,i) => Math.round(m + zThresh * rollingStd[i]));
+  const peaks = raw.map((v,i) => v > threshLine[i] ? v : null);
+
+  const labels = Array.from({length:48},(_,i)=>{const d=i<24?'Day1':'Day2';const h=i%24;return `${d} ${String(h).padStart(2,'0')}:00`;});
+
+  if(peakChart) peakChart.destroy();
+  peakChart = new Chart(document.getElementById('peak-chart'), {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'NO₂ readings',data:raw,borderColor:'#378add',backgroundColor:'rgba(55,138,221,0.05)',fill:true,tension:0.3,pointRadius:0,borderWidth:2},
+        {label:'Rolling mean',data:rollingMean,borderColor:'#ef9f27',borderWidth:1.5,borderDash:[4,2],pointRadius:0,fill:false},
+        {label:'Anomaly threshold',data:threshLine,borderColor:'#e24b4a',borderWidth:1,borderDash:[2,2],pointRadius:0,fill:false},
+        {label:'Peak detected',data:peaks,borderColor:'#e24b4a',backgroundColor:'rgba(226,75,74,0.6)',pointRadius:7,pointStyle:'triangle',showLine:false,borderWidth:1}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',maxTicksLimit:10,font:{size:10}}},
+        y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}},title:{display:true,text:'µg/m³',color:'#6e7681'}}
+      }
+    }
+  });
+}
+
+document.getElementById('zscore-slider').oninput = e => {
+  zThresh = parseFloat(e.target.value);
+  document.getElementById('zscore-val').textContent = zThresh.toFixed(1)+'σ';
+  drawPeakChart();
+};
+document.getElementById('window-slider').oninput = e => {
+  winSize = parseInt(e.target.value);
+  document.getElementById('window-val').textContent = winSize+'h';
+  drawPeakChart();
+};
+
+buildPeakStationSel();
+drawPeakChart();
+
+// Peak hour chart
+new Chart(document.getElementById('peak-hour-chart'),{
+  type:'bar',
+  data:{
+    labels:hours,
+    datasets:[{
+      label:'Peak count',
+      data:[1,0,0,0,0,1,2,3,2,2,3,2,2,1,1,1,2,2,3,3,4,5,4,2],
+      backgroundColor:'rgba(226,75,74,0.65)',
+      borderRadius:3
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:9},maxTicksLimit:12}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}},title:{display:true,text:'Events',color:'#6e7681'}}
+    }
+  }
+});
+
+// Peak log
+const logData = [
+  {time:'07:43',station:'St.16',val:246,type:'peak'},
+  {time:'08:12',station:'St.36',val:198,type:'warn'},
+  {time:'09:55',station:'St.11',val:219,type:'peak'},
+  {time:'12:22',station:'St.38',val:175,type:'warn'},
+  {time:'19:08',station:'St.35',val:212,type:'peak'},
+  {time:'20:41',station:'St.16',val:306,type:'peak'},
+  {time:'21:17',station:'St.36',val:249,type:'peak'},
+];
+const logEl = document.getElementById('peak-log');
+logData.forEach(l => {
+  logEl.innerHTML += `<div class="log-entry ${l.type}">
+    <span class="log-time">${l.time}</span>
+    <span class="log-msg">[${l.station}] NO₂=${l.val} µg/m³ — PEAK DETECTED</span>
+  </div>`;
+});
+
+// === COMPLIANCE ===
+new Chart(document.getElementById('compliance-chart'),{
+  type:'bar',
+  data:{
+    labels: stations.map(s=>`St.${s.id}`),
+    datasets:[
+      {label:'Annual mean',data:stations.map(s=>s.mean),backgroundColor:'rgba(55,138,221,0.65)',borderRadius:3},
+      {label:'WHO 10 µg/m³',data:Array(10).fill(10),type:'line',borderColor:'#1d9e75',borderWidth:1.5,borderDash:[3,2],pointRadius:0,fill:false},
+      {label:'EU 40 µg/m³',data:Array(10).fill(40),type:'line',borderColor:'#e24b4a',borderWidth:1.5,borderDash:[5,3],pointRadius:0,fill:false}
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'µg/m³',color:'#6e7681'},max:90}
+    }
+  }
+});
+
+new Chart(document.getElementById('exceed-chart'),{
+  type:'bar',
+  data:{
+    labels: stations.map(s=>`St.${s.id}`),
+    datasets:[{
+      label:'Exceedance rate (%)',
+      data: stations.map(s=>s.exceed),
+      backgroundColor: stations.map(s=>s.exceed>1.0?'rgba(226,75,74,0.7)':s.exceed>0.3?'rgba(186,117,23,0.7)':'rgba(29,158,117,0.7)'),
+      borderRadius:4
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'% hours > 200 µg/m³',color:'#6e7681'}}
+    }
+  }
+});
+
+const months = ['Jan 25','Feb 25','Mar 25','Apr 25','May 25','Jun 25','Jul 25','Aug 25','Sep 25','Oct 25','Nov 25','Dec 25','Jan 26','Feb 26'];
+const monthlyMean = [55,60,52,45,38,32,28,26,33,48,57,62,58,50];
+new Chart(document.getElementById('monthly-chart'),{
+  type:'line',
+  data:{
+    labels:months,
+    datasets:[
+      {label:'Monthly mean',data:monthlyMean,borderColor:'#7f77dd',backgroundColor:'rgba(127,119,221,0.1)',fill:true,tension:0.4,pointRadius:4,borderWidth:2},
+      {label:'EU annual 40',data:Array(14).fill(40),borderColor:'#e24b4a',borderWidth:1.5,borderDash:[5,3],pointRadius:0,fill:false},
+      {label:'WHO 25',data:Array(14).fill(25),borderColor:'#1d9e75',borderWidth:1.5,borderDash:[3,2],pointRadius:0,fill:false}
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'µg/m³',color:'#6e7681'}}
+    }
+  }
+});
+
+// === ALERTS ===
+let alerts = [
+  {type:'critical',station:'St.16 — Escuelas Aguilas',val:306,time:'20:41',msg:'NO₂ exceeded EU hourly limit (200 µg/m³)'},
+  {type:'critical',station:'St.11 — Retiro',val:249,time:'21:17',msg:'NO₂ exceeded EU hourly limit (200 µg/m³)'},
+  {type:'warning', station:'St.36 — Pza. del Carmen',val:175,time:'19:08',msg:'NO₂ above warning threshold (100 µg/m³)'},
+  {type:'info',    station:'St.38 — Cuatro Caminos',val:67,time:'18:30',msg:'NO₂ above WHO 24h guideline (25 µg/m³)'},
+  {type:'info',    station:'St.35 — Urb. Embajada',val:54,time:'17:45',msg:'NO₂ above WHO 24h guideline (25 µg/m³)'},
+];
+
+function renderAlerts() {
+  const el = document.getElementById('active-alerts');
+  el.innerHTML = '';
+  if(alerts.length===0){el.innerHTML='<div style="color:var(--ok);text-align:center;padding:20px;"><i class="ti ti-circle-check" style="font-size:24px;display:block;margin-bottom:8px;"></i>All stations within limits</div>';return;}
+  alerts.forEach(a => {
+    const icon = a.type==='critical'?'ti-alert-triangle':a.type==='warning'?'ti-alert-circle':'ti-info-circle';
+    el.innerHTML += `
+      <div class="alert-item ${a.type}">
+        <i class="ti ${icon} alert-icon"></i>
+        <div class="alert-body">
+          <div class="alert-title">${a.station} — ${a.val} µg/m³</div>
+          <div class="alert-meta">${a.msg}</div>
+        </div>
+        <div class="alert-time">${a.time}</div>
+      </div>`;
+  });
+  document.getElementById('crit-count').textContent = alerts.filter(a=>a.type==='critical').length;
+  document.getElementById('warn-count').textContent = alerts.filter(a=>a.type==='warning').length;
+  document.getElementById('info-count').textContent = alerts.filter(a=>a.type==='info').length;
+  document.getElementById('alert-count').textContent = alerts.filter(a=>a.type==='critical').length;
+}
+renderAlerts();
+
+function fireAlert(type) {
+  const stationNames = stations.map(s=>`St.${s.id} — ${s.name}`);
+  const stn = stationNames[Math.floor(Math.random()*stationNames.length)];
+  const val = type==='critical' ? Math.floor(Math.random()*150+200) : Math.floor(Math.random()*90+100);
+  const now = new Date();
+  const t = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  alerts.unshift({type,station:stn,val,time:t,msg:type==='critical'?'NO₂ exceeded EU hourly limit (200 µg/m³)':'NO₂ above warning threshold (100 µg/m³)'});
+  renderAlerts();
+}
+
+function clearAlerts() {
+  alerts = [];
+  renderAlerts();
+}
+
+['crit-thresh','warn-thresh','info-thresh'].forEach(id => {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id+'-val');
+  const unit = ' µg/m³';
+  el.oninput = () => valEl.textContent = el.value+unit;
+});
+
+// Alert history chart
+new Chart(document.getElementById('alert-history'),{
+  type:'bar',
+  data:{
+    labels:Array.from({length:30},(_,i)=>`D-${29-i}`),
+    datasets:[
+      {label:'Critical',data:Array.from({length:30},()=>Math.random()<0.15?Math.floor(Math.random()*3):0),backgroundColor:'rgba(226,75,74,0.7)',stack:'a'},
+      {label:'Warning', data:Array.from({length:30},()=>Math.random()<0.3 ?Math.floor(Math.random()*4):0),backgroundColor:'rgba(186,117,23,0.7)',stack:'a'}
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:9},maxTicksLimit:10}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},stacked:true}
+    }
+  }
+});
+
+// === DISPERSION SVG ===
+(function drawDispersion() {
+  const svg = document.getElementById('dispersion-svg');
+  const W=500, H=400;
+  // Map station coords to SVG space
+  const lats = stations.map(s=>s.lat), lons = stations.map(s=>s.lon);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLon=Math.min(...lons), maxLon=Math.max(...lons);
+  function toX(lon){ return 30 + (lon-minLon)/(maxLon-minLon)*(W-60); }
+  function toY(lat){ return H-30 - (lat-minLat)/(maxLat-minLat)*(H-60); }
+
+  // Gradient blobs for each station
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  stations.forEach((s,i) => {
+    const x=toX(s.lon), y=toY(s.lat);
+    const rg = document.createElementNS('http://www.w3.org/2000/svg','radialGradient');
+    rg.setAttribute('id',`rg${i}`);
+    rg.setAttribute('cx','50%'); rg.setAttribute('cy','50%'); rg.setAttribute('r','50%');
+    const t = Math.min(1, s.mean/100);
+    const color = t>0.6?'#e24b4a':t>0.4?'#ef9f27':'#1d9e75';
+    const stops = [
+      {offset:'0%',   color, opacity:0.5*t+0.15},
+      {offset:'100%', color, opacity:0}
+    ];
+    stops.forEach(st => {
+      const stop = document.createElementNS('http://www.w3.org/2000/svg','stop');
+      stop.setAttribute('offset',st.offset);
+      stop.setAttribute('stop-color',st.color);
+      stop.setAttribute('stop-opacity',st.opacity);
+      rg.appendChild(stop);
+    });
+    defs.appendChild(rg);
+  });
+  svg.appendChild(defs);
+
+  // Background
+  const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  bg.setAttribute('width',W); bg.setAttribute('height',H);
+  bg.setAttribute('fill','#161b22'); bg.setAttribute('rx','8');
+  svg.appendChild(bg);
+
+  // Grid lines
+  for(let i=0;i<5;i++){
+    const gl = document.createElementNS('http://www.w3.org/2000/svg','line');
+    gl.setAttribute('x1',30); gl.setAttribute('x2',W-30);
+    gl.setAttribute('y1',30+i*(H-60)/4); gl.setAttribute('y2',30+i*(H-60)/4);
+    gl.setAttribute('stroke','rgba(255,255,255,0.06)'); gl.setAttribute('stroke-width','1');
+    svg.appendChild(gl);
+    const gl2 = document.createElementNS('http://www.w3.org/2000/svg','line');
+    gl2.setAttribute('y1',30); gl2.setAttribute('y2',H-30);
+    gl2.setAttribute('x1',30+i*(W-60)/4); gl2.setAttribute('x2',30+i*(W-60)/4);
+    gl2.setAttribute('stroke','rgba(255,255,255,0.06)'); gl2.setAttribute('stroke-width','1');
+    svg.appendChild(gl2);
+  }
+
+  // Concentration blobs
+  stations.forEach((s,i) => {
+    const x=toX(s.lon), y=toY(s.lat);
+    const r = 30 + s.mean * 0.7;
+    const blob = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    blob.setAttribute('cx',x); blob.setAttribute('cy',y);
+    blob.setAttribute('rx',r); blob.setAttribute('ry',r*0.75);
+    blob.setAttribute('fill',`url(#rg${i})`);
+    svg.appendChild(blob);
+  });
+
+  // Station dots
+  const tt = document.getElementById('map-tt');
+  stations.forEach((s,i) => {
+    const x=toX(s.lon), y=toY(s.lat);
+    const t = Math.min(1, s.mean/100);
+    const color = s.mean>40?'#e24b4a':s.mean>25?'#ef9f27':'#1d9e75';
+
+    const outer = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    outer.setAttribute('cx',x); outer.setAttribute('cy',y);
+    outer.setAttribute('r','10'); outer.setAttribute('fill',color+'22');
+    outer.setAttribute('stroke',color); outer.setAttribute('stroke-width','1.5');
+    svg.appendChild(outer);
+
+    const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('cx',x); dot.setAttribute('cy',y);
+    dot.setAttribute('r','5'); dot.setAttribute('fill',color);
+    dot.style.cursor='pointer';
+    svg.appendChild(dot);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',x+12); label.setAttribute('y',y-8);
+    label.setAttribute('fill','#8b949e'); label.setAttribute('font-size','10');
+    label.textContent = `St.${s.id}`;
+    svg.appendChild(label);
+
+    [dot, outer].forEach(el => {
+      el.addEventListener('mouseenter', e => {
+        tt.style.display='block';
+        tt.innerHTML=`<div class="tt-name">St.${s.id} — ${s.name}</div>
+          <div class="tt-row"><span>Mean NO₂</span><span style="color:${color};font-weight:600;">${s.mean.toFixed(1)} µg/m³</span></div>
+          <div class="tt-row"><span>Peak</span><span>${s.max} µg/m³</span></div>
+          <div class="tt-row"><span>Type</span><span>${s.type}</span></div>
+          <div class="tt-row"><span>EU Exceedances</span><span>${s.exceed.toFixed(1)}%</span></div>`;
+        const rect = svg.getBoundingClientRect();
+        const svgX = parseFloat(dot.getAttribute('cx'));
+        const svgY = parseFloat(dot.getAttribute('cy'));
+        tt.style.left = (svgX/W*rect.width+20)+'px';
+        tt.style.top  = (svgY/H*rect.height-20)+'px';
+      });
+      el.addEventListener('mouseleave', () => tt.style.display='none');
+    });
+  });
+})();
+
+// Spatial scatter chart
+new Chart(document.getElementById('spatial-chart'),{
+  type:'scatter',
+  data:{
+    datasets:[{
+      label:'Stations',
+      data: stations.map(s=>({
+        x: Math.round(Math.sqrt(Math.pow((s.lat-40.4167)*111,2)+Math.pow((s.lon+3.7038)*85,2))*10)/10,
+        y: s.mean
+      })),
+      backgroundColor: stations.map(s=>s.mean>40?'rgba(226,75,74,0.8)':s.mean>25?'rgba(186,117,23,0.8)':'rgba(29,158,117,0.8)'),
+      pointRadius: 8, pointHoverRadius: 10
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'Distance from centre (km)',color:'#6e7681'}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'Mean NO₂ (µg/m³)',color:'#6e7681'}}
+    }
+  }
+});
+
+// Dispersion bubble
+new Chart(document.getElementById('dispersion-chart'),{
+  type:'bubble',
+  data:{
+    datasets:[{
+      label:'NO₂ dispersion',
+      data: stations.map((s,i) => ({
+        x: (s.lon+3.7038)*85,
+        y: (s.lat-40.4167)*111,
+        r: Math.sqrt(s.mean)*1.2
+      })),
+      backgroundColor: stations.map(s=>s.mean>40?'rgba(226,75,74,0.45)':s.mean>25?'rgba(186,117,23,0.45)':'rgba(55,138,221,0.45)'),
+      borderColor: stations.map(s=>s.mean>40?'#e24b4a':s.mean>25?'#ef9f27':'#378add'),
+      borderWidth: 1.5
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'West ← → East (km)',color:'#6e7681'}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'South ← → North (km)',color:'#6e7681'}}
+    }
+  }
+});
+
+// === HEATMAP ===
+(function buildHeatmap(){
+  const container = document.getElementById('heatmap-container');
+  const stNames = stations.map(s=>`St.${s.id}`);
+
+  const vals = stations.map(s => hourlyPattern.map(m => Math.round(s.mean * m)));
+  const allVals = vals.flat();
+  const vMin = Math.min(...allVals), vMax = Math.max(...allVals);
+
+  function getColor(v) {
+    const t = Math.min(1, (v-vMin)/(vMax-vMin));
+    if(t<0.33) return `rgba(24,95,165,${0.3+t*1.5})`;
+    if(t<0.66) return `rgba(239,159,39,${0.4+t*0.6})`;
+    return `rgba(226,75,74,${0.5+t*0.5})`;
+  }
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:80px repeat(24,1fr);gap:2px;font-size:10px;';
+
+  // Header row
+  grid.innerHTML += '<div></div>';
+  hours.forEach(h => {
+    grid.innerHTML += `<div style="height:18px;display:flex;align-items:center;justify-content:center;color:#6e7681;font-size:9px;">${h.slice(0,2)}</div>`;
+  });
+
+  // Data rows
+  stations.forEach((s,si) => {
+    grid.innerHTML += `<div style="display:flex;align-items:center;color:#8b949e;font-size:11px;padding-right:6px;white-space:nowrap;">St.${s.id}</div>`;
+    vals[si].forEach((v,hi) => {
+      grid.innerHTML += `<div title="St.${s.id} at ${hours[hi]}: ${v} µg/m³" style="height:22px;border-radius:2px;background:${getColor(v)};cursor:default;"></div>`;
+    });
+  });
+
+  container.appendChild(grid);
+})();
+
+// Hourly mean chart
+const hourlyNetMean = hourlyPattern.map(m => Math.round(42.3*m));
+new Chart(document.getElementById('hourly-mean-chart'),{
+  type:'line',
+  data:{
+    labels:hours,
+    datasets:[{
+      label:'Network hourly mean',
+      data:hourlyNetMean,
+      borderColor:'#7f77dd',
+      backgroundColor:'rgba(127,119,221,0.1)',
+      fill:true,tension:0.4,pointRadius:3,borderWidth:2
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',maxTicksLimit:8,font:{size:10}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'µg/m³',color:'#6e7681'}}
+    }
+  }
+});
+
+// Weekday chart
+new Chart(document.getElementById('weekday-chart'),{
+  type:'bar',
+  data:{
+    labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    datasets:[{
+      label:'Mean NO₂',
+      data:[52,54,51,55,58,38,31],
+      backgroundColor:['rgba(55,138,221,0.7)','rgba(55,138,221,0.7)','rgba(55,138,221,0.7)','rgba(55,138,221,0.7)','rgba(226,75,74,0.7)','rgba(29,158,117,0.7)','rgba(29,158,117,0.7)'],
+      borderRadius:4
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'µg/m³',color:'#6e7681'}}
+    }
+  }
+});
+
+// === FORECAST CHARTS ===
+function genForecastData(mae, n=60) {
+  const actual=[], pred=[];
+  let v=40;
+  for(let i=0;i<n;i++){
+    v = Math.max(5, v + (Math.random()-0.48)*8);
+    actual.push(Math.round(v));
+    pred.push(Math.max(0, Math.round(v + (Math.random()-0.5)*mae*2)));
+  }
+  return {actual, pred};
+}
+
+const fLabels = Array.from({length:60},(_,i)=>`Day ${i+1}`);
+
+function drawForecast(canvasId, mae, color) {
+  const {actual, pred} = genForecastData(mae);
+  new Chart(document.getElementById(canvasId),{
+    type:'line',
+    data:{
+      labels:fLabels,
+      datasets:[
+        {label:'Actual',data:actual,borderColor:'#8b949e',borderWidth:1.5,pointRadius:0,tension:0.3},
+        {label:'Predicted',data:pred,borderColor:color,borderWidth:2,pointRadius:0,tension:0.3,borderDash:[]}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',maxTicksLimit:10,font:{size:10}}},
+        y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'NO₂ µg/m³',color:'#6e7681'}}
+      }
+    }
+  });
+}
+
+drawForecast('t1-chart',4.2,'#378add');
+drawForecast('t7-chart',11.7,'#ef9f27');
+drawForecast('t14-chart',18.3,'#e24b4a');
+
+// Model comparison MAE
+new Chart(document.getElementById('mae-chart'),{
+  type:'bar',
+  data:{
+    labels:['CNN-LSTM t+1','CNN-LSTM t+7','CNN-LSTM t+14','Random Forest'],
+    datasets:[{
+      label:'MAE (µg/m³)',
+      data:[4.2,11.7,18.3,6.1],
+      backgroundColor:['rgba(55,138,221,0.7)','rgba(239,159,39,0.7)','rgba(226,75,74,0.7)','rgba(127,119,221,0.7)'],
+      borderRadius:5
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:10}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},title:{display:true,text:'MAE µg/m³',color:'#6e7681'}}
+    }
+  }
+});
+
+// R2 comparison
+new Chart(document.getElementById('r2-chart'),{
+  type:'bar',
+  data:{
+    labels:['CNN-LSTM t+1','CNN-LSTM t+7','CNN-LSTM t+14','Random Forest'],
+    datasets:[{
+      label:'R² Score',
+      data:[0.91,0.72,0.54,0.84],
+      backgroundColor:['rgba(55,138,221,0.7)','rgba(239,159,39,0.7)','rgba(226,75,74,0.7)','rgba(127,119,221,0.7)'],
+      borderRadius:5
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681',font:{size:10}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#6e7681'},max:1,title:{display:true,text:'R²',color:'#6e7681'}}
+    }
+  }
+});
+
+// Auto-refresh simulation
+setInterval(() => {
+  document.getElementById('avg-no2').textContent = (42 + (Math.random()-0.5)*3).toFixed(1);
+  document.getElementById('peak-count').textContent = Math.floor(Math.random()*4+5);
+  buildStationTable();
+}, 30000);
+
+// ═══════════════════════════════════════════════
+// FUSION SECTION JS
+// ═══════════════════════════════════════════════
+
+// Simulated per-station fusion data (24 Madrid AQMS stations)
+const fusionStations = [
+  {name:'Pza. España',        sensor:58.4, satellite:38.1, w:0.82},
+  {name:'Escuelas Aguilas',   sensor:71.2, satellite:51.4, w:0.88},
+  {name:'Cuatro Caminos',     sensor:52.7, satellite:36.9, w:0.79},
+  {name:'Barrio del Pilar',   sensor:38.1, satellite:22.4, w:0.71},
+  {name:'Vallecas',           sensor:44.3, satellite:27.8, w:0.74},
+  {name:'Méndez Álvaro',      sensor:61.0, satellite:42.3, w:0.85},
+  {name:'Castellana',         sensor:67.5, satellite:47.8, w:0.83},
+  {name:'Retiro',             sensor:49.2, satellite:31.6, w:0.76},
+  {name:'Pza. del Carmen',    sensor:63.8, satellite:44.1, w:0.84},
+  {name:'Moratalaz',          sensor:35.4, satellite:20.2, w:0.68},
+  {name:'Urb. Embajada',      sensor:29.7, satellite:15.9, w:0.62},
+  {name:'Sanchinarro',        sensor:31.2, satellite:17.4, w:0.65},
+  {name:'El Pardo',           sensor:18.4, satellite:8.3,  w:0.51},
+  {name:'Farolillo',          sensor:55.9, satellite:37.2, w:0.81},
+  {name:'Casa de Campo',      sensor:27.6, satellite:14.8, w:0.60},
+  {name:'Barajas',            sensor:42.1, satellite:26.3, w:0.73},
+  {name:'Villaverde',         sensor:47.8, satellite:30.1, w:0.76},
+  {name:'Ensanche Vallecas',  sensor:39.5, satellite:24.2, w:0.70},
+  {name:'Hortaleza',          sensor:33.7, satellite:19.5, w:0.67},
+  {name:'Getafe Norte',       sensor:50.4, satellite:33.8, w:0.78},
+  {name:'Juan Carlos I',      sensor:36.1, satellite:21.7, w:0.69},
+  {name:'Leganés',            sensor:46.2, satellite:29.5, w:0.75},
+  {name:'Alcobendas',         sensor:40.8, satellite:25.6, w:0.72},
+  {name:'Coslada',            sensor:43.5, satellite:27.1, w:0.74},
+];
+
+// Compute fused values
+fusionStations.forEach(s => {
+  const satCal = s.satellite + 18.4; // bias correction
+  s.satCal = +satCal.toFixed(1);
+  s.fused = +(s.w * s.sensor + (1 - s.w) * satCal).toFixed(1);
+  s.bias = +(s.sensor - s.satellite).toFixed(1);
+});
+
+// ── Pipeline SVG Diagram ─────────────────────────────────
+(function drawPipeline() {
+  const container = document.getElementById('fusion-pipeline-svg');
+  if (!container) return;
+  const steps = [
+    {label:'Raw CSV\nSensor Data', color:'#378add', icon:'📂'},
+    {label:'Station\nMetadata', color:'#378add', icon:'📍'},
+    {label:'GeoDataFrame\n(UTM 30N)', color:'#1d9e75', icon:'🗺️'},
+    {label:'Ordinary\nKriging', color:'#1d9e75', icon:'📐'},
+    {label:'TROPOMI\n(GEE)', color:'#ba7517', icon:'🛸'},
+    {label:'Unit\nConversion', color:'#ba7517', icon:'🔄'},
+    {label:'Bias\nCorrection', color:'#7f77dd', icon:'⚖️'},
+    {label:'Uncertainty\nWeighting', color:'#7f77dd', icon:'📊'},
+    {label:'Variance-Weighted\nFusion', color:'#e24b4a', icon:'🔗'},
+    {label:'Fused\nGeoTIFF', color:'#e24b4a', icon:'💾'},
+  ];
+  const W = 900, H = 120, boxW = 78, boxH = 52;
+  const gap = (W - 20 - steps.length * boxW) / (steps.length - 1);
+  let html = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;">`;
+  steps.forEach((s, i) => {
+    const x = 10 + i * (boxW + gap);
+    const y = (H - boxH) / 2;
+    html += `<rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="7" fill="${s.color}22" stroke="${s.color}" stroke-width="1.5"/>`;
+    const lines = s.label.split('\n');
+    lines.forEach((line, li) => {
+      html += `<text x="${x + boxW/2}" y="${y + 18 + li*14}" text-anchor="middle" fill="${s.color}" font-size="9.5" font-family="Segoe UI,system-ui,sans-serif" font-weight="600">${line}</text>`;
+    });
+    if (i < steps.length - 1) {
+      const ax = x + boxW + 2, ay = H / 2;
+      html += `<line x1="${ax}" y1="${ay}" x2="${ax + gap - 4}" y2="${ay}" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" marker-end="url(#arr)"/>`;
+    }
+  });
+  html += `<defs><marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="rgba(255,255,255,0.25)"/></marker></defs>`;
+  html += `</svg>`;
+  container.innerHTML = html;
+})();
+
+// ── Bias chart (per station) ─────────────────────────────
+new Chart(document.getElementById('bias-chart'), {
+  type: 'bar',
+  data: {
+    labels: fusionStations.map(s => s.name.split(' ').slice(-1)[0]),
+    datasets: [{
+      label: 'Bias (sensor − satellite)',
+      data: fusionStations.map(s => s.bias),
+      backgroundColor: fusionStations.map(s => s.bias > 0 ? 'rgba(29,158,117,0.65)' : 'rgba(226,75,74,0.65)'),
+      borderRadius: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681', font: { size: 8 }, maxRotation: 45 } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681' }, title: { display: true, text: 'µg/m³', color: '#6e7681' } }
+    }
+  }
+});
+
+// ── Simulated NO₂ map surfaces using Canvas 2D ───────────
+function drawNO2Map(canvasId, pattern, stationColor, title) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 300;
+  const H = 220;
+  canvas.width = W; canvas.height = H;
+
+  // Draw synthetic NO₂ gradient surface
+  const imgData = ctx.createImageData(W, H);
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const nx = px / W, ny = py / H;
+      let val = pattern(nx, ny);
+      val = Math.max(0, Math.min(1, val));
+      // YlOrRd palette
+      let r, g, b;
+      if (val < 0.33) { r = 24 + val * 3 * (239-24); g = 95 + val * 3 * (159-95); b = 165 + val * 3 * (39-165); }
+      else if (val < 0.66) { const t = (val - 0.33) / 0.33; r = 239 + t * (226-239); g = 159 + t * (75-159); b = 39 + t * (74-39); }
+      else { const t = (val - 0.66) / 0.34; r = 226 + t * (180-226); g = 75 + t * (20-75); b = 74 + t * (20-74); }
+      const idx = (py * W + px) * 4;
+      imgData.data[idx] = r; imgData.data[idx+1] = g; imgData.data[idx+2] = b; imgData.data[idx+3] = 230;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // Station dots
+  fusionStations.slice(0, 10).forEach((s, i) => {
+    const px = (0.15 + (i % 5) * 0.17) * W;
+    const py = (0.2 + Math.floor(i / 5) * 0.5) * H;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI*2);
+    ctx.fillStyle = stationColor; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.strokeRect(0, 0, W, H);
+}
+
+// Use slightly different patterns for each map
+const krigPattern  = (x, y) => 0.3 + 0.5 * Math.exp(-((x-0.45)**2 + (y-0.5)**2) / 0.08) + 0.2 * Math.exp(-((x-0.7)**2 + (y-0.3)**2) / 0.05);
+const satPattern   = (x, y) => 0.25 + 0.45 * Math.exp(-((x-0.5)**2 + (y-0.5)**2) / 0.12) + 0.15 * Math.exp(-((x-0.65)**2 + (y-0.35)**2) / 0.07);
+const fusedPattern = (x, y) => {
+  const k = krigPattern(x, y);
+  const s = satPattern(x, y);
+  const wSensor = Math.exp(-((x-0.45)**2 + (y-0.5)**2) / 0.15);
+  return wSensor * k + (1 - wSensor) * s;
+};
+
+setTimeout(() => {
+  drawNO2Map('map-kriging',  krigPattern,  '#1d9e75', 'Kriging');
+  drawNO2Map('map-satellite', satPattern,  '#ba7517', 'Satellite');
+  drawNO2Map('map-fused',    fusedPattern, '#7f77dd', 'Fused');
+}, 200);
+
+// ── Fusion scatter chart ─────────────────────────────────
+new Chart(document.getElementById('fusion-scatter-chart'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'Fused vs Sensor',
+        data: fusionStations.map(s => ({ x: s.sensor, y: s.fused })),
+        backgroundColor: 'rgba(127,119,221,0.65)',
+        pointRadius: 7, pointHoverRadius: 9
+      },
+      {
+        label: '1:1 line',
+        data: [{x:15,y:15},{x:80,y:80}],
+        type: 'line',
+        borderColor: 'rgba(255,255,255,0.2)',
+        borderWidth: 1.5,
+        borderDash: [4,3],
+        pointRadius: 0,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681' }, title: { display: true, text: 'Sensor NO₂ (µg/m³)', color: '#6e7681' } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681' }, title: { display: true, text: 'Fused NO₂ (µg/m³)', color: '#6e7681' } }
+    }
+  }
+});
+
+// ── West–East profile chart ──────────────────────────────
+const profileX = Array.from({length: 30}, (_, i) => (-3.825 + i * (3.825-3.530)/29).toFixed(3));
+const krigProfile  = profileX.map((_, i) => 25 + 45 * Math.exp(-((i/29 - 0.4)**2) / 0.07) + 10 * Math.sin(i/5));
+const satProfile   = profileX.map((_, i) => 20 + 38 * Math.exp(-((i/29 - 0.42)**2) / 0.09) + 6 * Math.sin(i/5));
+const fusedProfile = profileX.map((_, i) => {
+  const w = Math.exp(-((i/29 - 0.4)**2) / 0.15);
+  return w * krigProfile[i] + (1-w) * (satProfile[i] + 18.4);
+});
+new Chart(document.getElementById('fusion-profile-chart'), {
+  type: 'line',
+  data: {
+    labels: profileX,
+    datasets: [
+      { label: 'Kriging', data: krigProfile, borderColor: '#1d9e75', borderWidth: 2, pointRadius: 0, tension: 0.4 },
+      { label: 'Satellite', data: satProfile, borderColor: '#ba7517', borderWidth: 2, pointRadius: 0, tension: 0.4, borderDash: [5,3] },
+      { label: 'Fused', data: fusedProfile, borderColor: '#7f77dd', borderWidth: 2.5, pointRadius: 0, tension: 0.4 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 14 } } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681', maxTicksLimit: 7, font: { size: 10 } }, title: { display: true, text: 'Longitude (°W)', color: '#6e7681' } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681' }, title: { display: true, text: 'NO₂ (µg/m³)', color: '#6e7681' } }
+    }
+  }
+});
+
+// ── Fusion table ─────────────────────────────────────────
+(function buildFusionTable() {
+  const tbody = document.getElementById('fusion-table-body');
+  if (!tbody) return;
+  fusionStations.forEach(s => {
+    const biasColor = s.bias > 0 ? 'var(--ok)' : 'var(--danger)';
+    const wBar = Math.round(s.w * 100);
+    tbody.innerHTML += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 10px;color:var(--text);">${s.name}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--ok);font-weight:600;">${s.sensor.toFixed(1)}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--warn);">${s.satCal.toFixed(1)}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--purple);font-weight:600;">${s.fused.toFixed(1)}</td>
+      <td style="padding:8px 10px;text-align:right;color:${biasColor};">${s.bias > 0 ? '+' : ''}${s.bias.toFixed(1)}</td>
+      <td style="padding:8px 10px;text-align:right;">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+          <div style="width:50px;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+            <div style="width:${wBar}%;height:100%;background:var(--ok);border-radius:3px;"></div>
+          </div>
+          <span style="color:var(--text2);font-size:11px;">${(s.w*100).toFixed(0)}%</span>
+        </div>
+      </td>
+    </tr>`;
+  });
+})();
+
+</script>
+</body>
+</html>
